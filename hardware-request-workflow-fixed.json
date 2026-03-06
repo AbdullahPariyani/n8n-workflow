@@ -1,0 +1,498 @@
+{
+  "name": "Hardware Request Approval Workflow",
+  "description": "Multi-level approval workflow for employee hardware requests: Employee → Manager → IT Operation Manager → IT Operation Member for handover",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "hardware-request",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook_trigger",
+      "name": "Webhook - Request Received",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "hardware-request-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": [
+          {
+            "name": "requestId",
+            "value": "='HW-' + $now.getTime()"
+          },
+          {
+            "name": "employeeId",
+            "value": "={{ $json.body.employeeId }}"
+          },
+          {
+            "name": "employeeName",
+            "value": "={{ $json.body.employeeName }}"
+          },
+          {
+            "name": "employeeEmail",
+            "value": "={{ $json.body.employeeEmail }}"
+          },
+          {
+            "name": "managerId",
+            "value": "={{ $json.body.managerId }}"
+          },
+          {
+            "name": "managerEmail",
+            "value": "={{ $json.body.managerEmail }}"
+          },
+          {
+            "name": "hardwareType",
+            "value": "={{ $json.body.hardwareType }}"
+          },
+          {
+            "name": "description",
+            "value": "={{ $json.body.description }}"
+          },
+          {
+            "name": "urgency",
+            "value": "={{ $json.body.urgency || 'Normal' }}"
+          },
+          {
+            "name": "estimatedBudget",
+            "value": "={{ $json.body.estimatedBudget }}"
+          },
+          {
+            "name": "requestDate",
+            "value": "={{ $now.toISOString() }}"
+          },
+          {
+            "name": "status",
+            "value": "='Pending Manager Approval'"
+          }
+        ]
+      },
+      "id": "set_request_data",
+      "name": "Set Request Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json.managerEmail }}",
+        "subject": "Hardware Request Approval Required - {{ $json.requestId }}",
+        "emailType": "html",
+        "htmlMessage": "<html><body style='font-family: Arial, sans-serif; max-width: 600px;'>\n<div style='background-color: #f5f5f5; padding: 20px; border-radius: 5px;'>\n  <h2 style='color: #333;'>Hardware Request Approval</h2>\n  <p>Dear Manager,</p>\n  \n  <p>You have a new hardware request to approve from <strong>{{ $json.employeeName }}</strong>:</p>\n  \n  <table style='border-collapse: collapse; width: 100%; margin: 20px 0; background: white;'>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Request ID:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.requestId }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Employee:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.employeeName }}</td>\n    </tr>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Hardware Type:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.hardwareType }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Description:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.description }}</td>\n    </tr>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Urgency:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.urgency }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Estimated Budget:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>${{ $json.estimatedBudget }}</td>\n    </tr>\n  </table>\n  \n  <p>Please log in to the approval system to review this request.</p>\n  \n  <p style='color: #666; font-size: 12px; margin-top: 20px;'>Best regards,<br>Hardware Request System</p>\n</div>\n</body></html>"
+      },
+      "id": "send_to_manager",
+      "name": "Send to Manager for Approval",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "path": "manager-approval",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook_manager_approval",
+      "name": "Webhook - Manager Approval",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": [
+            {
+              "condition": "string",
+              "value1": "={{ $json.body.approved }}",
+              "value2": "true",
+              "operation": "equals"
+            }
+          ]
+        }
+      },
+      "id": "check_manager_approval",
+      "name": "Manager Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "assignments": [
+          {
+            "name": "status",
+            "value": "='Pending IT Manager Approval'"
+          },
+          {
+            "name": "managerApproved",
+            "value": "={{ true }}"
+          },
+          {
+            "name": "managerApprovalDate",
+            "value": "={{ $now.toISOString() }}"
+          },
+          {
+            "name": "managerApprovalNotes",
+            "value": "={{ $json.body.approvalNotes || '' }}"
+          }
+        ]
+      },
+      "id": "update_manager_approved",
+      "name": "Update - Manager Approved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 450]
+    },
+    {
+      "parameters": {
+        "assignments": [
+          {
+            "name": "status",
+            "value": "='Rejected by Manager'"
+          },
+          {
+            "name": "managerApproved",
+            "value": "={{ false }}"
+          },
+          {
+            "name": "managerApprovalDate",
+            "value": "={{ $now.toISOString() }}"
+          },
+          {
+            "name": "rejectionNotes",
+            "value": "={{ $json.body.rejectionNotes || 'No reason provided' }}"
+          }
+        ]
+      },
+      "id": "update_manager_rejected",
+      "name": "Update - Manager Rejected",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 550]
+    },
+    {
+      "parameters": {
+        "toEmail": "itoperationmanager@company.com",
+        "subject": "Hardware Request Approval - {{ $json.requestId }} - Manager Approved",
+        "emailType": "html",
+        "htmlMessage": "<html><body style='font-family: Arial, sans-serif; max-width: 600px;'>\n<div style='background-color: #f5f5f5; padding: 20px; border-radius: 5px;'>\n  <h2 style='color: #333;'>Hardware Request Requires IT Approval</h2>\n  <p>Dear IT Operations Manager,</p>\n  \n  <p>A hardware request has been approved by the employee's manager and requires your review:</p>\n  \n  <table style='border-collapse: collapse; width: 100%; margin: 20px 0; background: white;'>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Request ID:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.requestId }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Employee:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.employeeName }}</td>\n    </tr>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Hardware Type:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.hardwareType }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Description:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.description }}</td>\n    </tr>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Estimated Budget:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>${{ $json.estimatedBudget }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Manager Notes:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.managerApprovalNotes }}</td>\n    </tr>\n  </table>\n  \n  <p>Please log in to the approval system to review this request.</p>\n  \n  <p style='color: #666; font-size: 12px; margin-top: 20px;'>Best regards,<br>Hardware Request System</p>\n</div>\n</body></html>"
+      },
+      "id": "send_to_it_manager",
+      "name": "Send to IT Manager",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [850, 450]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json.employeeEmail }}",
+        "subject": "Hardware Request Rejected - {{ $json.requestId }}",
+        "emailType": "html",
+        "htmlMessage": "<html><body style='font-family: Arial, sans-serif; max-width: 600px;'>\n<div style='background-color: #f5f5f5; padding: 20px; border-radius: 5px;'>\n  <h2 style='color: #d32f2f;'>Request Status Update</h2>\n  <p>Dear {{ $json.employeeName }},</p>\n  \n  <p>Your hardware request <strong>{{ $json.requestId }}</strong> has been <strong style='color: #d32f2f;'>REJECTED</strong> by your manager.</p>\n  \n  <p><strong>Reason:</strong> {{ $json.rejectionNotes }}</p>\n  \n  <p>Please contact your manager to discuss this decision.</p>\n  \n  <p style='color: #666; font-size: 12px; margin-top: 20px;'>Best regards,<br>Hardware Request System</p>\n</div>\n</body></html>"
+      },
+      "id": "send_rejection_employee",
+      "name": "Send Rejection to Employee",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [850, 550]
+    },
+    {
+      "parameters": {
+        "path": "it-manager-approval",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook_it_manager_approval",
+      "name": "Webhook - IT Manager Approval",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 750]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": [
+            {
+              "condition": "string",
+              "value1": "={{ $json.body.approved }}",
+              "value2": "true",
+              "operation": "equals"
+            }
+          ]
+        }
+      },
+      "id": "check_it_manager_approval",
+      "name": "IT Manager Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 750]
+    },
+    {
+      "parameters": {
+        "assignments": [
+          {
+            "name": "status",
+            "value": "='Assigned for Handover'"
+          },
+          {
+            "name": "itManagerApproved",
+            "value": "={{ true }}"
+          },
+          {
+            "name": "itManagerApprovalDate",
+            "value": "={{ $now.toISOString() }}"
+          },
+          {
+            "name": "itManagerApprovalNotes",
+            "value": "={{ $json.body.approvalNotes || '' }}"
+          },
+          {
+            "name": "assignedMember",
+            "value": "={{ {'name': 'IT Support Team', 'email': 'itsupport@company.com'} }}"
+          }
+        ]
+      },
+      "id": "update_it_approved",
+      "name": "Update - IT Manager Approved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 700]
+    },
+    {
+      "parameters": {
+        "assignments": [
+          {
+            "name": "status",
+            "value": "='Rejected by IT Manager'"
+          },
+          {
+            "name": "itManagerApproved",
+            "value": "={{ false }}"
+          },
+          {
+            "name": "itManagerApprovalDate",
+            "value": "={{ $now.toISOString() }}"
+          },
+          {
+            "name": "rejectionNotes",
+            "value": "={{ $json.body.rejectionNotes || 'No reason provided' }}"
+          }
+        ]
+      },
+      "id": "update_it_rejected",
+      "name": "Update - IT Manager Rejected",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 800]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json.assignedMember.email }}",
+        "subject": "Hardware Handover Task - {{ $json.requestId }}",
+        "emailType": "html",
+        "htmlMessage": "<html><body style='font-family: Arial, sans-serif; max-width: 600px;'>\n<div style='background-color: #f5f5f5; padding: 20px; border-radius: 5px;'>\n  <h2 style='color: #333;'>Hardware Handover Assignment</h2>\n  <p>Dear IT Operations Team,</p>\n  \n  <p>You have been assigned a hardware handover task:</p>\n  \n  <table style='border-collapse: collapse; width: 100%; margin: 20px 0; background: white;'>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Request ID:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.requestId }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Employee:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.employeeName }} ({{ $json.employeeEmail }})</td>\n    </tr>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Hardware Type:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.hardwareType }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Description:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.description }}</td>\n    </tr>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Urgency:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.urgency }}</td>\n    </tr>\n  </table>\n  \n  <p>Please coordinate with the employee for hardware delivery and configuration.</p>\n  \n  <p style='color: #666; font-size: 12px; margin-top: 20px;'>Best regards,<br>Hardware Request System</p>\n</div>\n</body></html>"
+      },
+      "id": "send_to_it_member",
+      "name": "Send Handover Task to IT",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [850, 700]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json.employeeEmail }}",
+        "subject": "Hardware Request Approved! - {{ $json.requestId }}",
+        "emailType": "html",
+        "htmlMessage": "<html><body style='font-family: Arial, sans-serif; max-width: 600px;'>\n<div style='background-color: #f5f5f5; padding: 20px; border-radius: 5px;'>\n  <h2 style='color: #4CAF50;'>✓ Request Approved!</h2>\n  <p>Dear {{ $json.employeeName }},</p>\n  \n  <p>Great news! Your hardware request <strong>{{ $json.requestId }}</strong> has been <strong style='color: #4CAF50;'>APPROVED</strong>.</p>\n  \n  <table style='border-collapse: collapse; width: 100%; margin: 20px 0; background: white;'>\n    <tr style='background-color: #f2f2f2;'>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Hardware Type:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>{{ $json.hardwareType }}</td>\n    </tr>\n    <tr>\n      <td style='border: 1px solid #ddd; padding: 12px; font-weight: bold;'>Status:</td>\n      <td style='border: 1px solid #ddd; padding: 12px;'>Assigned for Handover</td>\n    </tr>\n  </table>\n  \n  <p>The IT Operations team will contact you shortly to arrange delivery and setup.</p>\n  \n  <p style='color: #666; font-size: 12px; margin-top: 20px;'>Best regards,<br>Hardware Request System</p>\n</div>\n</body></html>"
+      },
+      "id": "notify_employee_approved",
+      "name": "Notify Employee - Approved",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1050, 700]
+    },
+    {
+      "parameters": {
+        "toEmail": "={{ $json.employeeEmail }}",
+        "subject": "Hardware Request Rejected - {{ $json.requestId }}",
+        "emailType": "html",
+        "htmlMessage": "<html><body style='font-family: Arial, sans-serif; max-width: 600px;'>\n<div style='background-color: #f5f5f5; padding: 20px; border-radius: 5px;'>\n  <h2 style='color: #d32f2f;'>Request Status Update</h2>\n  <p>Dear {{ $json.employeeName }},</p>\n  \n  <p>Your hardware request <strong>{{ $json.requestId }}</strong> has been <strong style='color: #d32f2f;'>REJECTED</strong> by IT Operations.</p>\n  \n  <p><strong>Reason:</strong> {{ $json.rejectionNotes }}</p>\n  \n  <p>Please contact the IT Operations team to discuss this decision.</p>\n  \n  <p style='color: #666; font-size: 12px; margin-top: 20px;'>Best regards,<br>Hardware Request System</p>\n</div>\n</body></html>"
+      },
+      "id": "send_rejection_employee_it",
+      "name": "Send Rejection - IT Manager",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [850, 800]
+    }
+  ],
+  "connections": {
+    "webhook_trigger": {
+      "main": [
+        [
+          {
+            "node": "set_request_data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_request_data": {
+      "main": [
+        [
+          {
+            "node": "send_to_manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_to_manager": {
+      "main": [
+        [
+          {
+            "node": "webhook_manager_approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "webhook_manager_approval": {
+      "main": [
+        [
+          {
+            "node": "check_manager_approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_manager_approval": {
+      "main": [
+        [
+          {
+            "node": "update_manager_approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "update_manager_rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_manager_approved": {
+      "main": [
+        [
+          {
+            "node": "send_to_it_manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_manager_rejected": {
+      "main": [
+        [
+          {
+            "node": "send_rejection_employee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "send_to_it_manager": {
+      "main": [
+        [
+          {
+            "node": "webhook_it_manager_approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "webhook_it_manager_approval": {
+      "main": [
+        [
+          {
+            "node": "check_it_manager_approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_it_manager_approval": {
+      "main": [
+        [
+          {
+            "node": "update_it_approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "update_it_rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_it_approved": {
+      "main": [
+        [
+          {
+            "node": "send_to_it_member",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "notify_employee_approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "update_it_rejected": {
+      "main": [
+        [
+          {
+            "node": "send_rejection_employee_it",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "Hardware Management"
+    },
+    {
+      "id": "2",
+      "name": "Approval Workflow"
+    }
+  ]
+}
